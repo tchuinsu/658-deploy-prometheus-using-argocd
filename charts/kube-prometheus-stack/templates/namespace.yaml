@@ -4,7 +4,7 @@ kind: Namespace
 metadata:
   name: {{ include "kube-prometheus-stack.namespace" . }}
   labels:
-    {{- include "kube-prometheus-stack.labels" . | nindent 4 }}
+    {{- include "kube-prometheus-stack.wrapperLabels" . | nindent 4 }}
     kubernetes.io/metadata.name: {{ include "kube-prometheus-stack.namespace" . }}
   {{- with .Values.namespaceAnnotations }}
   annotations:

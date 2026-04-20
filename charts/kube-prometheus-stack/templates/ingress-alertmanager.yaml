@@ -5,7 +5,7 @@ metadata:
   name: {{ include "kube-prometheus-stack.fullname" . }}-alertmanager
   namespace: {{ include "kube-prometheus-stack.namespace" . }}
   labels:
-    {{- include "kube-prometheus-stack.labels" . | nindent 4 }}
+    {{- include "kube-prometheus-stack.wrapperLabels" . | nindent 4 }}
     app.kubernetes.io/component: alertmanager
   annotations:
     {{- with .Values.alertmanagerIngress.annotations }}

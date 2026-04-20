@@ -7,7 +7,7 @@ metadata:
   name: {{ include "kube-prometheus-stack.fullname" $ }}-{{ .name }}
   namespace: {{ include "kube-prometheus-stack.namespace" $ }}
   labels:
-    {{- include "kube-prometheus-stack.labels" $ | nindent 4 }}
+    {{- include "kube-prometheus-stack.wrapperLabels" $ | nindent 4 }}
     release: {{ $.Release.Name }}
     app: kube-prometheus-stack
 spec:

@@ -5,7 +5,7 @@ metadata:
   name: {{ include "kube-prometheus-stack.fullname" . }}-custom-alerts
   namespace: {{ include "kube-prometheus-stack.namespace" . }}
   labels:
-    {{- include "kube-prometheus-stack.labels" . | nindent 4 }}
+    {{- include "kube-prometheus-stack.wrapperLabels" . | nindent 4 }}
     ## These labels make Prometheus pick up this rule (must match ruleSelector).
     release: {{ .Release.Name }}
     app: kube-prometheus-stack

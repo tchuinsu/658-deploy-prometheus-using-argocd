@@ -31,7 +31,7 @@ Create chart label.
 {{/*
 Common labels applied to every resource in this chart.
 */}}
-{{- define "kube-prometheus-stack.labels" -}}
+{{- define "kube-prometheus-stack.wrapperLabels" -}}
 helm.sh/chart: {{ include "kube-prometheus-stack.chart" . }}
 {{ include "kube-prometheus-stack.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
