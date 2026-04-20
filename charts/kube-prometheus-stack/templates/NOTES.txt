@@ -1,44 +1,26 @@
 ========================================================================
-  kube-prometheus-stack — {{ .Release.Name }} ({{ .Values.environment | default "stage" }})
+  kube-prometheus-stack deployed to namespace: monitoring
 ========================================================================
 
-Prometheus, Grafana, and Alertmanager have been deployed to the
-'{{ include "kube-prometheus-stack.namespace" . }}' namespace.
+Prometheus, Grafana, and Alertmanager are running.
 
-── Grafana ──────────────────────────────────────────────────────────────
-  Port-forward:
-    kubectl -n {{ include "kube-prometheus-stack.namespace" . }} port-forward \
-      svc/{{ .Release.Name }}-grafana 3000:80
-
+-- Grafana --
+  kubectl -n monitoring port-forward svc/prometheus-stack-grafana 3000:80
   Open: http://localhost:3000
-  User: {{ index .Values "kube-prometheus-stack" "grafana" "adminUser" | default "admin" }}
-  Pass: (set in values — grafana.adminPassword)
+  User: admin / (see grafana.adminPassword in values.yaml)
 
-{{- if .Values.grafanaIngress.enabled }}
-  Ingress: https://{{ .Values.grafanaIngress.host }}
-{{- end }}
-
-── Prometheus ───────────────────────────────────────────────────────────
-  Port-forward:
-    kubectl -n {{ include "kube-prometheus-stack.namespace" . }} port-forward \
-      svc/{{ .Release.Name }}-kube-prometheus-stack-prometheus 9090:9090
-
+-- Prometheus --
+  kubectl -n monitoring port-forward \
+    svc/prometheus-stack-kube-prometheus-stack-prometheus 9090:9090
   Open: http://localhost:9090
 
-── Alertmanager ─────────────────────────────────────────────────────────
-  Port-forward:
-    kubectl -n {{ include "kube-prometheus-stack.namespace" . }} port-forward \
-      svc/{{ .Release.Name }}-kube-prometheus-stack-alertmanager 9093:9093
-
+-- Alertmanager --
+  kubectl -n monitoring port-forward \
+    svc/prometheus-stack-kube-prometheus-stack-alertmanager 9093:9093
   Open: http://localhost:9093
 
-── Useful commands ──────────────────────────────────────────────────────
-  # Watch all pods
-  kubectl -n {{ include "kube-prometheus-stack.namespace" . }} get pods -w
-
-  # Check custom PrometheusRules
-  kubectl -n {{ include "kube-prometheus-stack.namespace" . }} get prometheusrules
-
-  # Check ServiceMonitors
-  kubectl -n {{ include "kube-prometheus-stack.namespace" . }} get servicemonitors
+-- Useful commands --
+  kubectl -n monitoring get pods
+  kubectl -n monitoring get prometheusrules
+  kubectl -n monitoring get servicemonitors
 ========================================================================
