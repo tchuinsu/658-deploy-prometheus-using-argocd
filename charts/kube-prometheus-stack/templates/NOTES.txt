@@ -11,7 +11,7 @@ Prometheus, Grafana, and Alertmanager have been deployed to the
       svc/{{ .Release.Name }}-grafana 3000:80
 
   Open: http://localhost:3000
-  User: {{ .Values.kube-prometheus-stack.grafana.adminUser | default "admin" }}
+  User: {{ index .Values "kube-prometheus-stack" "grafana" "adminUser" | default "admin" }}
   Pass: (set in values — grafana.adminPassword)
 
 {{- if .Values.grafanaIngress.enabled }}
