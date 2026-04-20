@@ -1,0 +1,455 @@
+## =============================================================================
+## Stage values for the kube-prometheus-stack wrapper chart
+## =============================================================================
+## All settings below are tuned for a stage environment:
+##   - smaller resource footprint
+##   - shorter retention
+##   - single replica (no HA)
+## Override individual keys in a separate values file or via --set when needed.
+## =============================================================================
+
+## Target environment label (propagated to alert labels and resource labels)
+environment: stage
+
+## Override the namespace (defaults to Release.Namespace)
+namespaceOverride: monitoring
+
+## If true, the chart creates the monitoring Namespace object.
+## Set to false when ArgoCD's CreateNamespace sync option is used instead.
+createNamespace: false
+
+namespaceAnnotations: {}
+  # iam.amazonaws.com/permitted: "prometheus-role"
+
+nameOverride: ""
+fullnameOverride: ""
+
+# ── Ingress: Grafana ─────────────────────────────────────────────────────────
+grafanaIngress:
+  enabled: false
+  ingressClassName: nginx        # change to your ingress class
+  host: grafana.stage.example.com
+  path: /
+  pathType: Prefix
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  tls:
+    - secretName: grafana-tls
+      hosts:
+        - grafana.stage.example.com
+
+# ── Ingress: Prometheus ───────────────────────────────────────────────────────
+prometheusIngress:
+  enabled: false
+  ingressClassName: nginx
+  host: prometheus.stage.example.com
+  path: /
+  pathType: Prefix
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  tls:
+    - secretName: prometheus-tls
+      hosts:
+        - prometheus.stage.example.com
+
+# ── Ingress: Alertmanager ─────────────────────────────────────────────────────
+alertmanagerIngress:
+  enabled: false
+  ingressClassName: nginx
+  host: alertmanager.stage.example.com
+  path: /
+  pathType: Prefix
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  tls:
+    - secretName: alertmanager-tls
+      hosts:
+        - alertmanager.stage.example.com
+
+# ── Grafana admin credentials Secret ─────────────────────────────────────────
+## Set create: true to let the chart manage the Secret.
+## In production, prefer an external secret manager (ESO, Vault, etc.).
+grafanaAdminSecret:
+  create: false
+  name: grafana-admin-credentials
+  adminUser: admin
+  adminPassword: ""   # required when create: true
+
+# ── Alertmanager config Secret ────────────────────────────────────────────────
+## Set create: true to let the chart render and manage the Alertmanager config.
+alertmanagerConfigSecret:
+  create: false
+  name: alertmanager-config
+  resolveTimeout: 5m
+  repeatInterval: 12h
+  defaultReceiver: "null"
+  ## Slack (optional) — set the URL to enable Slack receivers
+  slackApiUrl: ""
+  slackCriticalChannel: "#alerts-critical"
+  slackWarningChannel: "#alerts-warning"
+  ## PagerDuty (optional)
+  pagerdutyUrl: ""
+
+# ── Custom PrometheusRules ────────────────────────────────────────────────────
+customAlerts:
+  enabled: true   # set to false to skip the custom alert rules
+
+# ── Custom ServiceMonitors ────────────────────────────────────────────────────
+customServiceMonitors:
+  enabled: false
+  monitors:
+    ## Example: scrape a service named "my-app" in the "default" namespace
+    # - name: my-app
+    #   namespaces:
+    #     - default
+    #   matchAllNamespaces: false
+    #   selector:
+    #     app: my-app
+    #   endpoints:
+    #     - port: http-metrics
+    #       interval: 30s
+    #       path: /metrics
+
+# ── Custom PodMonitors ────────────────────────────────────────────────────────
+customPodMonitors:
+  enabled: false
+  monitors:
+    ## Example: scrape pods labelled app=my-worker
+    # - name: my-worker
+    #   namespaces:
+    #     - default
+    #   matchAllNamespaces: false
+    #   selector:
+    #     app: my-worker
+    #   podMetricsEndpoints:
+    #     - port: metrics
+    #       interval: 30s
+    #       path: /metrics
+
+# ── Custom Grafana dashboards ─────────────────────────────────────────────────
+## Each key becomes a separate ConfigMap with grafana_dashboard: "1" label.
+## Grafana's sidecar picks them up automatically.
+customDashboards:
+  enabled: false
+  folder: "Custom"
+  dashboards: {}
+  ## Example:
+  # dashboards:
+  #   my-app-overview:
+  #     title: "My App Overview"
+  #     panels: []
+
+# ── NetworkPolicy ─────────────────────────────────────────────────────────────
+networkPolicy:
+  enabled: false
+  ingressControllerNamespace: ingress-nginx
+
+# =============================================================================
+# kube-prometheus-stack sub-chart values
+# =============================================================================
+kube-prometheus-stack:
+
+  # ── Global ──────────────────────────────────────────────────────────────────
+  fullnameOverride: ""
+  namespaceOverride: monitoring
+
+  # ── Prometheus ──────────────────────────────────────────────────────────────
+  prometheus:
+    prometheusSpec:
+      ## 15-day retention for stage (production: 90d)
+      retention: 15d
+      retentionSize: ""
+
+      ## Single replica — no HA for stage
+      replicas: 1
+
+      ## Disable HA sharding
+      shards: 1
+
+      ## Persistent storage — 20 Gi for stage
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 20Gi
+
+      resources:
+        requests:
+          cpu: 200m
+          memory: 512Mi
+        limits:
+          cpu: "1"
+          memory: 2Gi
+
+      ## Pick up all ServiceMonitors / PodMonitors / Rules regardless of label
+      serviceMonitorSelectorNilUsesHelmValues: false
+      podMonitorSelectorNilUsesHelmValues: false
+      ruleSelectorNilUsesHelmValues: false
+      probeSelectorNilUsesHelmValues: false
+
+      ## Additional scrape configs (appended to the generated ones)
+      additionalScrapeConfigs: []
+      # - job_name: my-external-target
+      #   static_configs:
+      #     - targets: ["10.0.0.1:9100"]
+
+      ## External labels added to every time series (useful for multi-cluster)
+      externalLabels:
+        cluster: stage
+        region: us-east-1   # update to match your cloud region
+
+      ## Thanos sidecar (disabled for stage; enable for long-term storage)
+      thanos: {}
+
+      ## Alertmanager endpoint (auto-discovered within the namespace)
+      alertingEndpoints: []
+
+      ## Enable WAL compression to reduce disk usage
+      walCompression: true
+
+      ## Security context
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+
+      ## Pod topology spread (disabled for single-replica stage)
+      topologySpreadConstraints: []
+
+    ## Service type — ClusterIP keeps Prometheus internal
+    service:
+      type: ClusterIP
+      port: 9090
+
+    ## ServiceAccount
+    serviceAccount:
+      create: true
+      name: prometheus
+
+  # ── Alertmanager ────────────────────────────────────────────────────────────
+  alertmanager:
+    alertmanagerSpec:
+      replicas: 1
+
+      ## Persistent storage for Alertmanager
+      storage:
+        volumeClaimTemplate:
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 5Gi
+
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+
+    ## Built-in Alertmanager config (used when alertmanagerConfigSecret.create=false)
+    config:
+      global:
+        resolve_timeout: 5m
+      route:
+        group_by: ["alertname", "namespace"]
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 12h
+        receiver: "null"
+        routes:
+          - matchers:
+              - name: alertname
+                value: Watchdog
+            receiver: "null"
+      receivers:
+        - name: "null"
+      templates: []
+
+    service:
+      type: ClusterIP
+      port: 9093
+
+  # ── Grafana ─────────────────────────────────────────────────────────────────
+  grafana:
+    enabled: true
+    replicas: 1
+
+    ## Override with grafanaAdminSecret if create: true
+    adminUser: admin
+    adminPassword: "stage-admin-password"
+
+    persistence:
+      enabled: true
+      size: 5Gi
+      accessModes: ["ReadWriteOnce"]
+
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+    service:
+      type: ClusterIP
+      port: 80
+
+    ## Pre-installed community dashboards
+    defaultDashboardsEnabled: true
+    defaultDashboardsTimezone: utc
+
+    ## Sidecar picks up ConfigMaps with grafana_dashboard: "1" label
+    sidecar:
+      dashboards:
+        enabled: true
+        label: grafana_dashboard
+        labelValue: "1"
+        searchNamespace: ALL     # scan all namespaces for dashboard ConfigMaps
+        folderAnnotation: grafana_folder
+        provider:
+          foldersFromFilesStructure: true
+      datasources:
+        enabled: true
+
+    grafana.ini:
+      analytics:
+        check_for_updates: false
+      server:
+        root_url: "%(protocol)s://%(domain)s/"
+      auth.anonymous:
+        enabled: false
+      log:
+        mode: console
+        level: info
+      alerting:
+        enabled: false   # use Alertmanager instead
+
+    ## Additional data sources (Prometheus is auto-configured)
+    additionalDataSources: []
+    # - name: Loki
+    #   type: loki
+    #   url: http://loki.logging.svc.cluster.local:3100
+    #   access: proxy
+
+  # ── Prometheus Operator ─────────────────────────────────────────────────────
+  prometheusOperator:
+    enabled: true
+    replicas: 1
+
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+    ## Admission webhook (optional — disable if cert-manager is not available)
+    admissionWebhooks:
+      enabled: true
+      patch:
+        enabled: true
+
+    ## CRD management
+    manageCrds: true
+
+  # ── Node Exporter ────────────────────────────────────────────────────────────
+  nodeExporter:
+    enabled: true
+
+  prometheus-node-exporter:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 32Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+    tolerations:
+      ## Ensure node-exporter runs on every node including control-plane
+      - effect: NoSchedule
+        operator: Exists
+
+  # ── kube-state-metrics ───────────────────────────────────────────────────────
+  kubeStateMetrics:
+    enabled: true
+
+  kube-state-metrics:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+
+  # ── Component scraping ───────────────────────────────────────────────────────
+  kubeApiServer:
+    enabled: true
+  kubeControllerManager:
+    enabled: true
+    endpoints: []     # auto-discovered; set to node IPs if not found
+  kubeScheduler:
+    enabled: true
+    endpoints: []
+  kubeEtcd:
+    enabled: true
+    endpoints: []
+    serviceMonitor:
+      scheme: http    # change to "https" if etcd uses TLS
+  kubelet:
+    enabled: true
+  kubeProxy:
+    enabled: true
+  coreDns:
+    enabled: true
+
+  # ── Default alert rules ──────────────────────────────────────────────────────
+  defaultRules:
+    create: true
+    rules:
+      alertmanager: true
+      etcd: true
+      configReloaders: true
+      general: true
+      k8sContainerCpuUsageSecondsTotal: true
+      k8sContainerMemoryCache: true
+      k8sContainerMemoryRss: true
+      k8sContainerMemorySwap: true
+      k8sContainerResource: true
+      k8sPodOwner: true
+      kubeApiserverAvailability: true
+      kubeApiserverBurnrate: true
+      kubeApiserverHistogram: true
+      kubeApiserverSlos: true
+      kubeControllerManager: true
+      kubelet: true
+      kubeProxy: true
+      kubePrometheusGeneral: true
+      kubePrometheusNodeRecording: true
+      kubernetesApps: true
+      kubernetesResources: true
+      kubernetesStorage: true
+      kubernetesSystem: true
+      kubeSchedulerAlerting: true
+      kubeSchedulerRecording: true
+      kubeStateMetrics: true
+      network: true
+      node: true
+      nodeExporterAlerting: true
+      nodeExporterRecording: true
+      prometheus: true
+      prometheusOperator: true

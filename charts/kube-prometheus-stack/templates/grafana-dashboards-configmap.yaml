@@ -1,0 +1,19 @@
+{{- if .Values.customDashboards.enabled }}
+{{- range $name, $json := .Values.customDashboards.dashboards }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "kube-prometheus-stack.fullname" $ }}-dashboard-{{ $name }}
+  namespace: {{ include "kube-prometheus-stack.namespace" $ }}
+  labels:
+    {{- include "kube-prometheus-stack.labels" $ | nindent 4 }}
+    ## Grafana sidecar picks up ConfigMaps with this label
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: {{ $.Values.customDashboards.folder | default "Custom" | quote }}
+data:
+  {{ $name }}.json: |
+    {{- $json | toJson | nindent 4 }}
+{{- end }}
+{{- end }}

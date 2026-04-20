@@ -1,0 +1,10 @@
+apiVersion: v2
+name: kube-prometheus-stack
+description: Wrapper chart for deploying kube-prometheus-stack in the stage cluster
+type: application
+version: 0.1.0
+appVersion: "0.75.0"
+dependencies:
+  - name: kube-prometheus-stack
+    version: ">=65.0.0 <70.0.0"
+    repository: https://prometheus-community.github.io/helm-charts

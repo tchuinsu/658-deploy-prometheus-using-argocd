@@ -1,0 +1,67 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prometheus-stack
+  namespace: argocd
+  labels:
+    environment: stage
+    team: platform
+  annotations:
+    ## Prevents ArgoCD from deleting the namespace and CRDs on app deletion.
+    ## Remove the annotation below only after careful review.
+    argocd.argoproj.io/sync-options: ServerSideApply=true
+  finalizers:
+    ## Cascade-delete child resources when the ArgoCD Application is deleted.
+    ## Remove this finalizer if you want to keep resources after app deletion.
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    ## Point at YOUR fork of this repo — update the URL before applying.
+    repoURL: https://github.com/tchuinsu/658-deploy-prometheus-using-argocd.git
+    targetRevision: HEAD
+    path: charts/kube-prometheus-stack
+
+    helm:
+      ## Values file relative to the chart path above
+      valueFiles:
+        - values.yaml
+      ## Skip the CRD install hook — ArgoCD manages CRD lifecycle separately.
+      skipCrds: false
+
+  destination:
+    ## Target: stage cluster. Replace with your stage API server URL if
+    ## ArgoCD manages an external cluster, e.g. https://stage.k8s.example.com
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+
+  syncPolicy:
+    automated:
+      prune: true       # Remove resources no longer in git
+      selfHeal: true    # Revert manual changes in the cluster
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true          # Creates 'monitoring' if it doesn't exist
+      - ServerSideApply=true          # Needed for large CRDs (avoids annotation size limit)
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  ## Health checks — ArgoCD will wait for these to become healthy
+  ignoreDifferences:
+    ## Prometheus Operator mutates these fields; ignore them to avoid
+    ## continuous out-of-sync state.
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
+      jqPathExpressions:
+        - .webhooks[]?.clientConfig.caBundle
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      jqPathExpressions:
+        - .webhooks[]?.clientConfig.caBundle

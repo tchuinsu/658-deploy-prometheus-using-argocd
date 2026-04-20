@@ -1,0 +1,196 @@
+{{- if .Values.customAlerts.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "kube-prometheus-stack.fullname" . }}-custom-alerts
+  namespace: {{ include "kube-prometheus-stack.namespace" . }}
+  labels:
+    {{- include "kube-prometheus-stack.labels" . | nindent 4 }}
+    ## These labels make Prometheus pick up this rule (must match ruleSelector).
+    release: {{ .Release.Name }}
+    app: kube-prometheus-stack
+spec:
+  groups:
+    # ── Pod health ────────────────────────────────────────────────────────────
+    - name: pod.rules
+      interval: 30s
+      rules:
+        - alert: PodCrashLooping
+          expr: |
+            increase(kube_pod_container_status_restarts_total[15m]) > 3
+          for: 5m
+          labels:
+            severity: warning
+            environment: {{ .Values.environment | default "stage" }}
+          annotations:
+            summary: "Pod {{ "{{" }} $labels.pod {{ "}}" }} is crash-looping"
+            description: |
+              Pod {{ "{{" }} $labels.namespace {{ "}}" }}/{{ "{{" }} $labels.pod {{ "}}" }} has restarted
+              more than 3 times in the last 15 minutes.
+              Current restart count: {{ "{{" }} $value {{ "}}" }}
+            runbook_url: "https://runbooks.example.com/pod-crash-looping"
+
+        - alert: PodNotReady
+          expr: |
+            kube_pod_status_ready{condition="false"} == 1
+          for: 10m
+          labels:
+            severity: warning
+            environment: {{ .Values.environment | default "stage" }}
+          annotations:
+            summary: "Pod {{ "{{" }} $labels.pod {{ "}}" }} is not ready"
+            description: |
+              Pod {{ "{{" }} $labels.namespace {{ "}}" }}/{{ "{{" }} $labels.pod {{ "}}" }} has been
+              in a non-ready state for more than 10 minutes.
+            runbook_url: "https://runbooks.example.com/pod-not-ready"
+
+        - alert: PodOOMKilled
+          expr: |
+            kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} == 1
+          for: 0m
+          labels:
+            severity: critical
+            environment: {{ .Values.environment | default "stage" }}
+          annotations:
+            summary: "Container OOMKilled in pod {{ "{{" }} $labels.pod {{ "}}" }}"
+            description: |
+              Container {{ "{{" }} $labels.container {{ "}}" }} in pod
+              {{ "{{" }} $labels.namespace {{ "}}" }}/{{ "{{" }} $labels.pod {{ "}}" }} was OOMKilled.
+              Consider increasing memory limits.
+            runbook_url: "https://runbooks.example.com/oom-killed"
+
+    # ── Node health ───────────────────────────────────────────────────────────
+    - name: node.rules
+      interval: 60s
+      rules:
+        - alert: NodeHighCPU
+          expr: |
+            100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+          for: 10m
+          labels:
+            severity: warning
+            environment: {{ .Values.environment | default "stage" }}
+          annotations:
+            summary: "High CPU usage on node {{ "{{" }} $labels.instance {{ "}}" }}"
+            description: |
+              CPU usage on {{ "{{" }} $labels.instance {{ "}}" }} is {{ "{{" }} $value | printf "%.1f" {{ "}}" }}%
+              (threshold: 85%) for more than 10 minutes.
+            runbook_url: "https://runbooks.example.com/high-cpu"
+
+        - alert: NodeHighMemory
+          expr: |
+            (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+          for: 10m
+          labels:
+            severity: warning
+            environment: {{ .Values.environment | default "stage" }}
+          annotations:
+            summary: "High memory usage on node {{ "{{" }} $labels.instance {{ "}}" }}"
+            description: |
+              Memory usage on {{ "{{" }} $labels.instance {{ "}}" }} is {{ "{{" }} $value | printf "%.1f" {{ "}}" }}%
+              (threshold: 85%) for more than 10 minutes.
+            runbook_url: "https://runbooks.example.com/high-memory"
+
+        - alert: NodeDiskPressure
+          expr: |
+            (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 15
+          for: 5m
+          labels:
+            severity: critical
+            environment: {{ .Values.environment | default "stage" }}
+          annotations:
+            summary: "Low disk space on node {{ "{{" }} $labels.instance {{ "}}" }}"
+            description: |
+              Disk on {{ "{{" }} $labels.instance {{ "}}" }} ({{ "{{" }} $labels.mountpoint {{ "}}" }}) has
+              only {{ "{{" }} $value | printf "%.1f" {{ "}}" }}% free (threshold: 15%).
+            runbook_url: "https://runbooks.example.com/disk-pressure"
+
+        - alert: NodeNotReady
+          expr: |
+            kube_node_status_condition{condition="Ready",status="true"} == 0
+          for: 5m
+          labels:
+            severity: critical
+            environment: {{ .Values.environment | default "stage" }}
+          annotations:
+            summary: "Node {{ "{{" }} $labels.node {{ "}}" }} is not ready"
+            description: |
+              Node {{ "{{" }} $labels.node {{ "}}" }} has been in NotReady state for 5+ minutes.
+            runbook_url: "https://runbooks.example.com/node-not-ready"
+
+    # ── Deployment health ─────────────────────────────────────────────────────
+    - name: deployment.rules
+      interval: 60s
+      rules:
+        - alert: DeploymentReplicasMismatch
+          expr: |
+            kube_deployment_spec_replicas != kube_deployment_status_available_replicas
+          for: 10m
+          labels:
+            severity: warning
+            environment: {{ .Values.environment | default "stage" }}
+          annotations:
+            summary: "Deployment {{ "{{" }} $labels.deployment {{ "}}" }} has replica mismatch"
+            description: |
+              Deployment {{ "{{" }} $labels.namespace {{ "}}" }}/{{ "{{" }} $labels.deployment {{ "}}" }}
+              has {{ "{{" }} $value {{ "}}" }} available replicas but the spec requires more.
+            runbook_url: "https://runbooks.example.com/deployment-replicas-mismatch"
+
+        - alert: DeploymentNotAvailable
+          expr: |
+            kube_deployment_status_available_replicas == 0
+          for: 5m
+          labels:
+            severity: critical
+            environment: {{ .Values.environment | default "stage" }}
+          annotations:
+            summary: "Deployment {{ "{{" }} $labels.deployment {{ "}}" }} has 0 available replicas"
+            description: |
+              Deployment {{ "{{" }} $labels.namespace {{ "}}" }}/{{ "{{" }} $labels.deployment {{ "}}" }}
+              has had 0 available replicas for 5+ minutes.
+            runbook_url: "https://runbooks.example.com/deployment-unavailable"
+
+    # ── Prometheus self-monitoring ────────────────────────────────────────────
+    - name: prometheus.rules
+      interval: 60s
+      rules:
+        - alert: PrometheusTargetDown
+          expr: |
+            up == 0
+          for: 5m
+          labels:
+            severity: critical
+            environment: {{ .Values.environment | default "stage" }}
+          annotations:
+            summary: "Prometheus target down: {{ "{{" }} $labels.job {{ "}}" }}"
+            description: |
+              Target {{ "{{" }} $labels.instance {{ "}}" }} of job {{ "{{" }} $labels.job {{ "}}" }}
+              has been unreachable for 5+ minutes.
+            runbook_url: "https://runbooks.example.com/prometheus-target-down"
+
+        - alert: PrometheusConfigReloadFailed
+          expr: |
+            prometheus_config_last_reload_successful == 0
+          for: 5m
+          labels:
+            severity: critical
+            environment: {{ .Values.environment | default "stage" }}
+          annotations:
+            summary: "Prometheus config reload failed"
+            description: |
+              Prometheus failed to reload its configuration.
+              Check the Prometheus logs for details.
+
+        - alert: PrometheusStorageNearFull
+          expr: |
+            (prometheus_tsdb_storage_blocks_bytes / prometheus_tsdb_head_chunks_storage_size_bytes) > 0.85
+          for: 15m
+          labels:
+            severity: warning
+            environment: {{ .Values.environment | default "stage" }}
+          annotations:
+            summary: "Prometheus storage is near full"
+            description: |
+              Prometheus storage is {{ "{{" }} $value | printf "%.0f" {{ "}}" }}% full.
+              Consider increasing storage or reducing retention.
+{{- end }}

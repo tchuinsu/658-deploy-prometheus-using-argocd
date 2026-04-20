@@ -1,0 +1,33 @@
+{{- if .Values.grafanaIngress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "kube-prometheus-stack.fullname" . }}-grafana
+  namespace: {{ include "kube-prometheus-stack.namespace" . }}
+  labels:
+    {{- include "kube-prometheus-stack.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana
+  annotations:
+    {{- with .Values.grafanaIngress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- if .Values.grafanaIngress.ingressClassName }}
+  ingressClassName: {{ .Values.grafanaIngress.ingressClassName }}
+  {{- end }}
+  {{- if .Values.grafanaIngress.tls }}
+  tls:
+    {{- toYaml .Values.grafanaIngress.tls | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.grafanaIngress.host | quote }}
+      http:
+        paths:
+          - path: {{ .Values.grafanaIngress.path | default "/" }}
+            pathType: {{ .Values.grafanaIngress.pathType | default "Prefix" }}
+            backend:
+              service:
+                name: {{ .Release.Name }}-grafana
+                port:
+                  number: 80
+{{- end }}

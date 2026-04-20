@@ -1,0 +1,27 @@
+{{- if .Values.customPodMonitors.enabled }}
+{{- range .Values.customPodMonitors.monitors }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ include "kube-prometheus-stack.fullname" $ }}-{{ .name }}
+  namespace: {{ include "kube-prometheus-stack.namespace" $ }}
+  labels:
+    {{- include "kube-prometheus-stack.labels" $ | nindent 4 }}
+    release: {{ $.Release.Name }}
+    app: kube-prometheus-stack
+spec:
+  namespaceSelector:
+    {{- if .matchAllNamespaces }}
+    any: true
+    {{- else }}
+    matchNames:
+      {{- toYaml .namespaces | nindent 6 }}
+    {{- end }}
+  selector:
+    matchLabels:
+      {{- toYaml .selector | nindent 6 }}
+  podMetricsEndpoints:
+    {{- toYaml .podMetricsEndpoints | nindent 4 }}
+{{- end }}
+{{- end }}
